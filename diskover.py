@@ -36,6 +36,7 @@ import re
 import os
 import sys
 import json
+import calendar
 
 
 version = '1.5.0.6'
@@ -966,9 +967,9 @@ def index_get_docs(cliargs, logger, doctype='directory', copytags=False, hotdirs
                 pathdict[rel_path] = hit['_id']
             else:
                 # convert es time to unix time format
-                mtime = time.mktime(datetime.strptime(
+                mtime = calendar.timegm(datetime.strptime(
                     hit['_source']['last_modified'],
-                    '%Y-%m-%dT%H:%M:%S').timetuple())
+                    '%Y-%m-%dT%H:%M:%S').utctimetuple())
                 doclist.append((hit['_id'], fullpath, mtime, doctype))
             doccount += 1
         # use es scroll api
@@ -1457,12 +1458,12 @@ def calc_dir_sizes(cliargs, logger, path=None):
             for hit in res['hits']['hits']:
                 fullpath = os.path.join(hit['_source']['path_parent'], hit['_source']['filename'])
                 # convert es time to unix time format
-                mtime = time.mktime(datetime.strptime(hit['_source']['last_modified'],
-                    '%Y-%m-%dT%H:%M:%S').timetuple())
-                atime = time.mktime(datetime.strptime(hit['_source']['last_access'],
-                    '%Y-%m-%dT%H:%M:%S').timetuple())
-                ctime = time.mktime(datetime.strptime(hit['_source']['last_change'],
-                    '%Y-%m-%dT%H:%M:%S').timetuple())
+                mtime = calendar.timegm(datetime.strptime(hit['_source']['last_modified'],
+                    '%Y-%m-%dT%H:%M:%S').utctimetuple())
+                atime = calendar.timegm(datetime.strptime(hit['_source']['last_access'],
+                    '%Y-%m-%dT%H:%M:%S').utctimetuple())
+                ctime = calendar.timegm(datetime.strptime(hit['_source']['last_change'],
+                    '%Y-%m-%dT%H:%M:%S').utctimetuple())
                 dirlist.append((hit['_id'], fullpath, mtime, atime, ctime))
                 dircount += 1
                 dirlist_len = len(dirlist)

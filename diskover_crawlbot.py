@@ -18,6 +18,7 @@ import time
 import sys
 import os
 import threading
+import calendar
 from threading import Lock
 
 
@@ -48,41 +49,52 @@ def bot_thread(threadnum, cliargs, logger, rootdir_path, reindex_dict):
         if dirlist is None:
             break
         else:
+            lock.acquire(True)
             # random pick from dirlist
             i = len(dirlist) - 1
-            li = randint(0, i)
-            path = dirlist[li][1]
-            mtime_utc = dirlist[li][2]
+            if i >= 0:
+                li = randint(0, i)
+                path = dirlist[li][1]
+                mtime_utc = dirlist[li][2]
+            else:
+                path = None
         # pick a new path if same as last time
-        if path == last_path:
-            s += 1
-            continue
-        last_path = path
-        # check directory's mtime on disk
-        try:
-            mtime_now_utc = time.mktime(time.gmtime(os.lstat(path).st_mtime))
-        except (IOError, OSError) as e:
-            if cliargs['verbose']:
-                logger.warning('Error crawling directory %s caused by %s' % (path, e))
-            continue
-        if (mtime_now_utc == mtime_utc):
-            if cliargs['verbose']:
-                logger.info('Mtime unchanged: %s' % path)
+        if path is not None:
+            if path == last_path:
+                s += 1
+                lock.release()
+                continue
+            last_path = path
+            n += 1
+            # check directory's mtime on disk
+            try:
+                mtime_now_utc = calendar.timegm(time.gmtime(os.lstat(path).st_mtime))
+            except (IOError, OSError) as e:
+                if cliargs['verbose']:
+                    logger.warning('Error crawling directory %s caused by %s' % (path, e))
+                lock.release()
+                continue
+            if (mtime_now_utc == mtime_utc):
+                if cliargs['verbose']:
+                    logger.info('Mtime unchanged: %s' % path)
+                # remove from dirlist
+                del dirlist[li]
+                lock.release();
+            else:
+                c += 1
+                logger.info('*** Mtime changed! Reindexing: %s' % path)
+                # remove from dirlist
+                del dirlist[li]
+                lock.release()
+                # delete existing path docs (non-recursive)
+                reindex_dict = index_delete_path(path, cliargs, logger, reindex_dict)
+                # start crawling
+                crawl_tree(path, cliargs, logger, reindex_dict)
+                # calculate directory size for path
+                calc_dir_sizes(cliargs, logger, path=path)
         else:
-            c += 1
-            logger.info('*** Mtime changed! Reindexing: %s' % path)
-            # remove from dirlist
-            lock.acquire(True)
-            del dirlist[li]
             lock.release()
-            # delete existing path docs (non-recursive)
-            reindex_dict = index_delete_path(path, cliargs, logger, reindex_dict)
-            # start crawling
-            crawl_tree(path, cliargs, logger, reindex_dict)
-            # calculate directory size for path
-            calc_dir_sizes(cliargs, logger, path=path)
         time.sleep(config['crawlbot_botsleep'])
-        n += 1
 
 
 def start_crawlbot_scanner(cliargs, logger, rootdir_path, botdirlist, reindex_dict):
